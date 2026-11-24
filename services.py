@@ -53,7 +53,18 @@ def request_json(method, url, headers, *, params=None, payload=None):
             time.sleep(0.7)
             continue
         if response.status_code != 200:
-            raise ServiceError("Сервис не выполнил запрос. Проверьте тикер, доступность модели и настройки подключения.")
+            if response.status_code == 400:
+                try:
+                    error = response.json().get('error', {})
+                    details = error.get('details', []) if isinstance(error, dict) else []
+                    invalid_key = any(isinstance(d, dict) and d.get('reason') in ('API_KEY_INVALID', 'API_KEY_EXPIRED') for d in details)
+                except (ValueError, AttributeError, TypeError):
+                    invalid_key = False
+                if invalid_key:
+                    raise ServiceError("Gemini отклонил API-ключ (HTTP 400). Проверьте GEMINI_API_KEY в Secrets: нужен действующий ключ Google AI Studio.")
+            if response.status_code == 404 and method == 'POST':
+                raise ServiceError("Gemini: модель не найдена или недоступна этому проекту (HTTP 404). Проверьте GEMINI_MODEL в Secrets и доступные модели Google AI Studio.")
+            raise ServiceError(f"Сервис не выполнил запрос (HTTP {response.status_code}). Проверьте доступность модели и настройки подключения.")
         try:
             data = response.json()
             if not isinstance(data, dict):
