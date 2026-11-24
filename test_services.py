@@ -79,3 +79,12 @@ def test_market_pagination_and_news_failure(monkeypatch):
 def test_empty_market_does_not_fallback(monkeypatch):
     monkeypatch.setattr(s, 'request_json', Mock(return_value={'bars': {}}))
     with pytest.raises(s.ServiceError): s.market('AAPL', 30, 'key', 'secret')
+
+
+def test_placeholder_key_rejected_without_network(monkeypatch):
+    call = Mock()
+    monkeypatch.setattr(s.requests, 'request', call)
+    with pytest.raises(s.ServiceError) as error:
+        s.request_json('GET', 'https://data.alpaca.markets/v2/stocks/bars', {'APCA-API-KEY-ID': 'ваш ключ'})
+    assert 'ALPACA_API_KEY' in str(error.value)
+    call.assert_not_called()

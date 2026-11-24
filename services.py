@@ -34,6 +34,11 @@ class Budget:
 
 def request_json(method, url, headers, *, params=None, payload=None):
     # Never return upstream error bodies: they can contain credentials/request contents.
+    names = {'APCA-API-KEY-ID': 'ALPACA_API_KEY', 'APCA-API-SECRET-KEY': 'ALPACA_SECRET_KEY', 'x-goog-api-key': 'GEMINI_API_KEY'}
+    for header, name in names.items():
+        value = headers.get(header)
+        if value is not None and (not value or not value.isascii() or any(c.isspace() for c in value)):
+            raise ServiceError(f"Проверьте {name} в Streamlit Secrets: нужен настоящий ключ из кабинета сервиса, без кириллицы и пробелов. Замените текст-заглушку внутри кавычек. Сам ключ в чат не присылайте.")
     for attempt in range(2 if method == 'GET' else 1):
         try:
             response = requests.request(method, url, headers=headers, params=params,
@@ -121,7 +126,7 @@ def market(ticker, days, key, secret):
             if any(not math.isfinite(float(b[k])) or float(b[k]) <= 0 for k in ('o', 'h', 'l', 'c')):
                 raise ValueError()
             stage = 'диапазон OHLC'
-            if float(b['l']) > float(b['h']):
+            if float(b['l']) > min(float(b['o']), float(b['c'])) + 1e-6 or float(b['h']) < max(float(b['o']), float(b['c'])) - 1e-6:
                 raise ValueError()
         stage = 'расчёт метрик'
         metrics(bars)
