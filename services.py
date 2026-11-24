@@ -109,6 +109,8 @@ def market(ticker, days, key, secret):
         else:
             raise ServiceError("Слишком много страниц котировок. Выберите меньший период.")
         bars = sorted({b['t']: b for b in bars}.values(), key=lambda b: b['t'])[-days:]
+        if len(bars) < 3:
+            raise ServiceError(f"Alpaca ответил, но вернул только {len(bars)} дневных свечей IEX для {ticker} за {start.date()} — {end.date()}. Для анализа нужны минимум 3. Проверьте доступность истории для аккаунта.")
         for b in bars:
             if datetime.fromisoformat(b['t'].replace('Z', '+00:00')).tzinfo is None:
                 raise ValueError()
@@ -118,7 +120,7 @@ def market(ticker, days, key, secret):
                 raise ValueError()
         metrics(bars)
     except (ValueError, KeyError, TypeError, AttributeError):
-        raise ServiceError("Нет достаточной корректной истории для этого тикера.") from None
+        raise ServiceError("Alpaca вернул ответ, но формат или значения дневных свечей не прошли проверку. Попробуйте другой тикер.") from None
     result = {'symbol': ticker, 'bars': bars, 'mode': 'market', 'source': 'Alpaca • IEX • дневные свечи',
               'fetched_at': datetime.now(timezone.utc).isoformat(),
               'url': 'https://docs.alpaca.markets/us/reference/stockbars', 'news': [], 'news_error': '', 'news_status': ''}
