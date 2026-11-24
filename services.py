@@ -98,6 +98,7 @@ def market(ticker, days, key, secret):
     params = {'symbols': ticker, 'timeframe': '1Day', 'start': start.isoformat(), 'end': end.isoformat(),
               'feed': 'iex', 'adjustment': 'split', 'limit': 1000, 'sort': 'asc'}
     bars = []
+    stage = 'структура ответа'
     try:
         for _ in range(5):
             data = request_json('GET', url, headers, params=params)
@@ -108,19 +109,24 @@ def market(ticker, days, key, secret):
             params['page_token'] = token
         else:
             raise ServiceError("Слишком много страниц котировок. Выберите меньший период.")
+        stage = 'сортировка свечей'
         bars = sorted({b['t']: b for b in bars}.values(), key=lambda b: b['t'])[-days:]
         if len(bars) < 3:
             raise ServiceError(f"Alpaca ответил, но вернул только {len(bars)} дневных свечей IEX для {ticker} за {start.date()} — {end.date()}. Для анализа нужны минимум 3. Проверьте доступность истории для аккаунта.")
         for b in bars:
+            stage = 'дата свечи'
             if datetime.fromisoformat(b['t'].replace('Z', '+00:00')).tzinfo is None:
                 raise ValueError()
+            stage = 'числовые значения OHLC'
             if any(not math.isfinite(float(b[k])) or float(b[k]) <= 0 for k in ('o', 'h', 'l', 'c')):
                 raise ValueError()
-            if float(b['l']) > min(float(b['o']), float(b['c'])) or float(b['h']) < max(float(b['o']), float(b['c'])):
+            stage = 'диапазон OHLC'
+            if float(b['l']) > float(b['h']):
                 raise ValueError()
+        stage = 'расчёт метрик'
         metrics(bars)
-    except (ValueError, KeyError, TypeError, AttributeError):
-        raise ServiceError("Alpaca вернул ответ, но формат или значения дневных свечей не прошли проверку. Попробуйте другой тикер.") from None
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise ServiceError(f"Ответ Alpaca не прошёл проверку: {stage} ({type(e).__name__}). Ключи в сообщении не отображаются.") from None
     result = {'symbol': ticker, 'bars': bars, 'mode': 'market', 'source': 'Alpaca • IEX • дневные свечи',
               'fetched_at': datetime.now(timezone.utc).isoformat(),
               'url': 'https://docs.alpaca.markets/us/reference/stockbars', 'news': [], 'news_error': '', 'news_status': ''}
