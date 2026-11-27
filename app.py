@@ -3,6 +3,7 @@ import time
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from benchmark_ui import render_benchmark
 from core import (symbol, metrics, new_portfolio, trade, export_portfolio,
                          import_portfolio, quote_is_old)
 from services import (ServiceError, Budget, demo_market, market, context,
@@ -145,6 +146,13 @@ if snapshot:
         st.warning('Последняя свеча старше 5 суток или имеет некорректную дату. Виртуальные операции по ней отключены.')
 
 if page == 'Обзор рынка':
+    def benchmark_load(sym, length):
+        if mode == 'market' and not (key and api_secret):
+            raise ServiceError('Добавьте ключи Alpaca или выберите деморежим.')
+        return demo_market(sym, length) if mode == 'demo' else load_market(sym, length, key, api_secret)
+    render_benchmark(benchmark_load, mode, ticker, st.session_state.portfolios[mode], gemini, model, ai_budget, render_answer)
+    st.divider()
+    st.header('Компании · ' + ticker)
     if not snapshot:
         st.stop()
     columns = st.columns(4)
